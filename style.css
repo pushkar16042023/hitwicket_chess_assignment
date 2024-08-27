@@ -33,7 +33,7 @@ button:hover {
     background-color: #45a049; /* Darker shade of green upon hover */
 }
 
-/* Chess board and cell styles remain unchanged as per your request */
+/* Chess board and cell styles remain unchanged */
 #game-board {
     margin-top: 20px;
     display: grid;
@@ -69,11 +69,46 @@ button:hover {
 }
 
 .cell.playerA {
-    background-color: #e74c3c; /* Red for Player A */
-    color: #ecf0f1; /* White text for clear readability */
+    background-color: #000000; /* Black for Player A */
+    color: #FFFFFF; /* White text for high contrast */
 }
 
 .cell.playerB {
-    background-color: #2980b9; /* Blue for Player B */
-    color: #ecf0f1; /* White text for clear readability */
+    background-color: #800020; /* Burgundy for Player B */
+    color: #FFD700; /* Gold text for an elegant, readable contrast */
+}
+
+/* Styling for the game status and move history to make it more attractive */
+#game-status, #move-history {
+    background-color: rgba(255, 255, 255, 0.2); /* Semi-transparent white for a frosted glass look */
+    color: #FFD700; /* Gold color for an upscale appearance */
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    width: auto;
+    text-align: center;
+}
+
+#move-history {
+    max-height: 200px; /* Limit height and allow scrolling */
+    overflow-y: auto;
+}
+
+#move-history::-webkit-scrollbar {
+    width: 8px;
+}
+
+#move-history::-webkit-scrollbar-track {
+    background-color: #333;
+    border-radius: 10px;
+}
+
+#move-history::-webkit-scrollbar-thumb {
+    background-color: #888;
+    border-radius: 10px;
+}
+
+#move-history::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
