@@ -1,0 +1,43 @@
+#game-board {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(5, 70px); /* Adjust if needed to fit your grid size */
+    grid-template-rows: repeat(5, 70px);
+    gap: 5px;
+    background-color: #8B4513; /* Dark brown for the board border */
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.cell {
+    width: 70px;
+    height: 70px;
+    background-color: #f5f5dc; /* Creamish color for one type of square */
+    color: #333;
+    border-radius: 4px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5em;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.cell:nth-child(odd) {
+    background-color: #006400; /* Dark green for the alternate squares */
+}
+
+.cell:hover {
+    opacity: 0.9; /* Slight dim on hover for interaction */
+}
+
+.cell.playerA {
+    background-color: #e74c3c; /* Color for Player A */
+    color: #ecf0f1;
+}
+
+.cell.playerB {
+    background-color: #2980b9; /* Color for Player B */
+    color: #ecf0f1;
+}
