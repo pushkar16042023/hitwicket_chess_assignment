@@ -54,8 +54,8 @@ button:hover {
     border-radius: 4px;
     display: flex;
     justify-content: center;
-    align-items: center;
-    font-size: 1.5em;
+    align-items: flex-end;
+    font-size: 0.8em;
     cursor: pointer;
     transition: background-color 0.3s; /* Smooth transition for hover effects */
 }
@@ -87,7 +87,7 @@ button:hover {
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     width: auto;
-    text-align: center;
+    text-align: start;
 }
 
 #move-history {
