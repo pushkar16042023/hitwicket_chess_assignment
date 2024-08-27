@@ -51,7 +51,7 @@ button:hover {
     height: 70px;
     background-color: #f5f5dc; /* Creamish color for one type of square */
     color: #333; /* Dark text for contrast */
-    border-radius: 4px;
+    border-radius: 10px;
     display: flex;
     justify-content: center;
     align-items: flex-end;
@@ -69,13 +69,13 @@ button:hover {
 }
 
 .cell.playerA {
-    background-color: #000000; /* Black for Player A */
-    color: #FFFFFF; /* White text for high contrast */
+    background-color: #607D8B; 
+    color: #ECEFF1; /* White text for high contrast */
 }
 
 .cell.playerB {
-    background-color: #800020; /* Burgundy for Player B */
-    color: #FFD700; /* Gold text for an elegant, readable contrast */
+    background-color: #263238; 
+    color: #B0BEC5; /* Gold text for an elegant, readable contrast */
 }
 
 /* Styling for the game status and move history to make it more attractive */
