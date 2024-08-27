@@ -7,157 +7,119 @@ const port = process.env.PORT || 8050;
 const httpServer = http.createServer(app);
 app.use(express.static('public'));
 
-const wss = new WebSocketServer({ server: httpServer });
+const websocketServer = new WebSocketServer({ server: httpServer });
 
-httpServer.listen(port, () => console.log(`Listening on port ${port}`));
+httpServer.listen(port, () => console.log(`Server listening on port ${port}`));
 
-let gameStatus = {
-    grid: [],
+function restartGame() {
+    setupNewGame();
+    updateAllClients();
+}
+
+websocketServer.on('connection', socket => {
+    console.log('Connected: New player');
+    socket.on('message', data => processMessage(data, socket));
+    socket.on('close', () => console.log('Disconnected: Player left'));
+});
+
+let gameData = {
+    board: new Array(5).fill(null).map(() => new Array(5).fill(null)),
     activePlayer: 'A',
     teams: { A: [], B: [] },
-    victor: null
+    winner: null
 };
 
-function startNewGame() {
-    setupBoard();
-    assignTeams();
-    logGameState();
+function setupNewGame() {
+    gameData.board = gameData.board.map(() => new Array(5).fill(null));
+    gameData.activePlayer = 'A';
+    gameData.winner = null;
+    setInitialPositions();
+    console.log('Game setup complete');
 }
 
-function setupBoard() {
-    gameStatus.grid = Array(5).fill().map(() => Array(5).fill(null));
-    gameStatus.activePlayer = 'A';
-    gameStatus.victor = null;
-}
-
-function assignTeams() {
-    const positions = [0, 1, 2, 3, 4];
-    const roles = ['P1', 'P2', 'H1', 'H2', 'P3'];
-    gameStatus.teams.A = positions.map((pos, index) => createCharacter('A', roles[index], pos));
-    gameStatus.teams.B = positions.map((pos, index) => createCharacter('B', roles[index], pos));
-    populateBoard();
-}
-
-function createCharacter(team, role, pos) {
-    return { type: role, coords: [team === 'A' ? 0 : 4, pos] };
-}
-
-function populateBoard() {
-    Object.keys(gameStatus.teams).forEach(team => {
-        gameStatus.teams[team].forEach(char => {
-            gameStatus.grid[char.coords[0]][char.coords[1]] = `${team}-${char.type}`;
+function setInitialPositions() {
+    ['A', 'B'].forEach(team => {
+        const baseRow = team === 'A' ? 0 : 4;
+        gameData.teams[team] = ['P1', 'P2', 'H1', 'H2', 'P3'].map((type, idx) => ({
+            type,
+            pos: [baseRow, idx]
+        }));
+        gameData.teams[team].forEach(char => {
+            gameData.board[char.pos[0]][char.pos[1]] = `${team}-${char.type}`;
         });
     });
 }
 
-function logGameState() {
-    console.log('Game state initialized:', gameStatus);
-}
-
-wss.on('connection', socket => {
-    console.log('Player has connected');
-    socket.on('message', message => handleIncomingMessage(message, socket));
-    socket.on('close', () => console.log('Player has disconnected'));
-});
-
-function handleIncomingMessage(message, socket) {
-    let parsedMessage;
+function processMessage(message, socket) {
     try {
-        parsedMessage = JSON.parse(message);
-        routeMessage(parsedMessage, socket);
-    } catch (error) {
-        console.error('Failed to decode message', error);
-        socket.send(JSON.stringify({ event: 'error', details: 'Failed to decode your message.' }));
+        const { type, payload } = JSON.parse(message);
+        switch (type) {
+            case 'restart':
+                restartGame();
+                break;
+            case 'move':
+                if (makeMove(payload, socket)) {
+                    checkGameStatus();
+                    updateAllClients();
+                }
+                break;
+        }
+    } catch (err) {
+        console.error('Failed to process message:', err);
+        socket.send(JSON.stringify({ type: 'error', error: 'Invalid message format' }));
     }
 }
 
-function routeMessage({ event, content }, socket) {
-    if (event === 'resetGame') {
-        startNewGame();
-        informClients();
-    } else if (event === 'playerMove') {
-        processPlayerMove(content, socket);
+function makeMove({ player, piece, direction }, socket) {
+    if (player !== gameData.activePlayer) {
+        socket.send(JSON.stringify({ type: 'error', error: 'Not your turn' }));
+        return false;
     }
+    let { success, message } = attemptMove(piece, direction);
+    if (!success) {
+        socket.send(JSON.stringify({ type: 'moveError', error: message }));
+    }
+    return success;
 }
 
-function processPlayerMove({ participant, unit, move }, socket) {
-    if (participant !== gameStatus.activePlayer) {
-        socket.send(JSON.stringify({ event: 'error', details: 'Wait for your turn.' }));
-        return;
-    }
-    const outcome = validateAndExecuteMove(participant, unit, move);
-    if (outcome.valid) {
-        switchPlayer();
-        informClients();
-    } else {
-        socket.send(JSON.stringify({ event: 'moveError', details: outcome.reason }));
-    }
-}
-
-function validateAndExecuteMove(team, type, direction) {
-    const character = gameStatus.teams[team].find(char => char.type === type);
-    if (!character) {
-        return { valid: false, reason: 'Character not found.' };
-    }
-    const [newX, newY] = calculateNewCoords(character.coords, direction);
-    if (!withinBounds(newX, newY)) {
-        return { valid: false, reason: 'Out of bounds.' };
-    }
-    if (updatePositionIfPossible(character, newX, newY, team)) {
-        checkForVictory();
-        return { valid: true };
-    }
-    return { valid: false, reason: 'Blocked move.' };
-}
-
-function calculateNewCoords([x, y], direction) {
+function attemptMove(piece, direction) {
     const moves = { L: [0, -1], R: [0, 1], F: [1, 0], B: [-1, 0] };
-    return [x + moves[direction][0], y + moves[direction][1]];
+    let [x, y] = [piece.pos[0] + moves[direction][0], piece.pos[1] + moves[direction][1]];
+
+    if (x < 0 || x >= 5 || y < 0 || y >= 5) return { success: false, message: 'Out of bounds' };
+    if (gameData.board[x][y]) return { success: false, message: 'Space occupied' };
+
+    gameData.board[piece.pos[0]][piece.pos[1]] = null;
+    gameData.board[x][y] = `${gameData.activePlayer}-${piece.type}`;
+    piece.pos = [x, y];
+    return { success: true };
 }
 
-function withinBounds(x, y) {
-    return x >= 0 && x < 5 && y >= 0 && y < 5;
-}
-
-function updatePositionIfPossible(char, newX, newY, team) {
-    if (gameStatus.grid[newX][newY] && gameStatus.grid[newX][newY].startsWith(team)) {
-        return false; // Blocked by own team
-    }
-    gameStatus.grid[char.coords[0]][char.coords[1]] = null;
-    gameStatus.grid[newX][newY] = `${team}-${char.type}`;
-    char.coords = [newX, newY];
-    return true;
-}
-
-function checkForVictory() {
-    const remaining = { A: gameStatus.teams.A.length, B: gameStatus.teams.B.length };
+function checkGameStatus() {
+    let remaining = { A: gameData.teams.A.length, B: gameData.teams.B.length };
     if (!remaining.A || !remaining.B) {
-        gameStatus.victor = !remaining.A ? 'B' : 'A';
-        informVictory();
+        gameData.winner = remaining.A > 0 ? 'A' : 'B';
+        sendGameOver();
     }
 }
 
-function switchPlayer() {
-    gameStatus.activePlayer = gameStatus.activePlayer === 'A' ? 'B' : 'A';
-}
-
-function informClients() {
-    const state = JSON.stringify({ event: 'updateState', state: gameStatus });
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
+function updateAllClients() {
+    const state = JSON.stringify({ type: 'update', state: gameData });
+    websocketServer.clients.forEach(client => {
+        if (client.readyState === WebSocketServer.OPEN) {
             client.send(state);
         }
     });
 }
 
-function informVictory() {
-    const message = JSON.stringify({ event: 'gameOver', winner: gameStatus.victor });
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
+function sendGameOver() {
+    const message = JSON.stringify({ type: 'gameOver', winner: gameData.winner });
+    websocketServer.clients.forEach(client => {
+        if (client.readyState === WebSocketServer.OPEN) {
             client.send(message);
         }
     });
-    console.log(`Game over, winner: ${gameStatus.victor}`);
+    console.log(`Game over! Winner: ${gameData.winner}`);
 }
 
-startNewGame();
+setupNewGame();
