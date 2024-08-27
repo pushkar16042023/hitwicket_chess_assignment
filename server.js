@@ -1,125 +1,236 @@
 const express = require('express');
-const WebSocketServer = require('ws').Server;
+const WebSocket = require('ws');
 const http = require('http');
 
 const app = express();
 const port = process.env.PORT || 8050;
-const httpServer = http.createServer(app);
+const server = http.createServer(app);
 app.use(express.static('public'));
 
-const websocketServer = new WebSocketServer({ server: httpServer });
+const wss = new WebSocket.Server({ server });
 
-httpServer.listen(port, () => console.log(`Server listening on port ${port}`));
-
-function restartGame() {
-    setupNewGame();
-    updateAllClients();
-}
-
-websocketServer.on('connection', socket => {
-    console.log('Connected: New player');
-    socket.on('message', data => processMessage(data, socket));
-    socket.on('close', () => console.log('Disconnected: Player left'));
+server.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
 });
 
-let gameData = {
-    board: new Array(5).fill(null).map(() => new Array(5).fill(null)),
-    activePlayer: 'A',
-    teams: { A: [], B: [] },
+let gameState = {
+    board: [],
+    currentPlayer: 'A',
+    players: {
+        A: [],
+        B: []
+    },
     winner: null
 };
 
-function setupNewGame() {
-    gameData.board = gameData.board.map(() => new Array(5).fill(null));
-    gameData.activePlayer = 'A';
-    gameData.winner = null;
-    setInitialPositions();
-    console.log('Game setup complete');
+function initializeGame() {
+    gameState.board = Array(5).fill().map(() => Array(5).fill(null));
+    gameState.currentPlayer = 'A';
+    gameState.winner = null;
+
+    gameState.players.A = [
+        { type: 'P1', position: [0, 0] },
+        { type: 'P2', position: [0, 1] },
+        { type: 'H1', position: [0, 2] },
+        { type: 'H2', position: [0, 3] },
+        { type: 'P3', position: [0, 4] }
+    ];
+
+    gameState.players.B = [
+        { type: 'P1', position: [4, 0] },
+        { type: 'P2', position: [4, 1] },
+        { type: 'H1', position: [4, 2] },
+        { type: 'H2', position: [4, 3] },
+        { type: 'P3', position: [4, 4] }
+    ];
+
+    gameState.players.A.forEach(character => {
+        gameState.board[character.position[0]][character.position[1]] = `A-${character.type}`;
+    });
+
+    gameState.players.B.forEach(character => {
+        gameState.board[character.position[0]][character.position[1]] = `B-${character.type}`;
+    });
+
+    console.log('Game initialized:', gameState);
 }
 
-function setInitialPositions() {
-    ['A', 'B'].forEach(team => {
-        const baseRow = team === 'A' ? 0 : 4;
-        gameData.teams[team] = ['P1', 'P2', 'H1', 'H2', 'P3'].map((type, idx) => ({
-            type,
-            pos: [baseRow, idx]
-        }));
-        gameData.teams[team].forEach(char => {
-            gameData.board[char.pos[0]][char.pos[1]] = `${team}-${char.type}`;
+function broadcastGameState() {
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({
+                type: 'gameState',
+                data: gameState
+            }));
+        }
+    });
+}
+
+function broadcast(message) {
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(message));
+        }
+    });
+}
+
+function resetGame() {
+    initializeGame();
+    broadcastGameState();
+}
+
+function checkForGameEnd() {
+    const players = gameState.players;
+    const piecesLeft = { A: 0, B: 0 };
+
+    for (const player in players) {
+        piecesLeft[player] = players[player].length;
+    }
+
+    if (piecesLeft.A === 0) {
+        gameState.winner = 'B';
+    } else if (piecesLeft.B === 0) {
+        gameState.winner = 'A';
+    }
+
+    if (gameState.winner) {
+        broadcastGameState();
+        broadcast({
+            type: 'gameOver',
+            data: { winner: gameState.winner }
         });
-    });
+    }
 }
 
-function processMessage(message, socket) {
-    try {
-        const { type, payload } = JSON.parse(message);
-        switch (type) {
-            case 'restart':
-                restartGame();
-                break;
-            case 'move':
-                if (makeMove(payload, socket)) {
-                    checkGameStatus();
-                    updateAllClients();
+function processMove(player, character, direction) {
+    if (!isValidMove(player, character, direction)) {
+        return { success: false, message: 'Invalid move' };
+    }
+
+    const playerCharacters = gameState.players[player];
+    const characterData = playerCharacters.find(c => c.type === character);
+
+    if (!characterData) {
+        return { success: false, message: 'Character not found' };
+    }
+
+    const [x, y] = characterData.position;
+    let newX = x;
+    let newY = y;
+
+    switch (character) {
+        case 'P1': case 'P2': case 'P3': 
+            switch (direction) {
+                case 'L': newY -= 1; break;
+                case 'R': newY += 1; break;
+                case 'F': newX += (player === 'A' ? 1 : -1); break;
+                case 'B': newX -= (player === 'A' ? 1 : -1); break;
+                default: return { success: false, message: 'Invalid direction' };
+            }
+            break;
+
+        case 'H1': case 'H2':
+            switch (direction) {
+                case 'L': newY -= 2; break;
+                case 'R': newY += 2; break;
+                case 'F': newX += (player === 'A' ? 2 : -2); break;
+                case 'B': newX -= (player === 'A' ? 2 : -2); break;
+                default: return { success: false, message: 'Invalid direction' };
+            }
+            // Handle killing opponent's character in the path
+            if (direction === 'L' || direction === 'R') {
+                const stepY = (direction === 'L') ? -1 : 1;
+                if (gameState.board[x][y + stepY] && gameState.board[x][y + stepY][0] === (player === 'A' ? 'B' : 'A')) {
+                    // Capture opponent's character
+                    gameState.players[player].push({
+                        type: gameState.board[x][y + stepY].split('-')[1],
+                        position: [x, y + stepY]
+                    });
                 }
-                break;
-        }
-    } catch (err) {
-        console.error('Failed to process message:', err);
-        socket.send(JSON.stringify({ type: 'error', error: 'Invalid message format' }));
+            }
+            break;
+
+        default:
+            return { success: false, message: 'Character type not recognized' };
     }
+
+    // Update board
+    gameState.board[x][y] = null;
+    gameState.board[newX][newY] = `${player}-${character}`;
+    characterData.position = [newX, newY];
+
+    return { success: true, message: 'Move processed successfully' };
 }
 
-function makeMove({ player, piece, direction }, socket) {
-    if (player !== gameData.activePlayer) {
-        socket.send(JSON.stringify({ type: 'error', error: 'Not your turn' }));
-        return false;
-    }
-    let { success, message } = attemptMove(piece, direction);
-    if (!success) {
-        socket.send(JSON.stringify({ type: 'moveError', error: message }));
-    }
-    return success;
+function isValidMove(player, character, direction) {
+    // Implement move validation logic here
+    return true; // Placeholder
 }
 
-function attemptMove(piece, direction) {
-    const moves = { L: [0, -1], R: [0, 1], F: [1, 0], B: [-1, 0] };
-    let [x, y] = [piece.pos[0] + moves[direction][0], piece.pos[1] + moves[direction][1]];
+wss.on('connection', (ws) => {
+    console.log('A new player connected');
+    ws.send(JSON.stringify({
+        type: 'gameState',
+        data: gameState
+    }));
 
-    if (x < 0 || x >= 5 || y < 0 || y >= 5) return { success: false, message: 'Out of bounds' };
-    if (gameData.board[x][y]) return { success: false, message: 'Space occupied' };
-
-    gameData.board[piece.pos[0]][piece.pos[1]] = null;
-    gameData.board[x][y] = `${gameData.activePlayer}-${piece.type}`;
-    piece.pos = [x, y];
-    return { success: true };
-}
-
-function checkGameStatus() {
-    let remaining = { A: gameData.teams.A.length, B: gameData.teams.B.length };
-    if (!remaining.A || !remaining.B) {
-        gameData.winner = remaining.A > 0 ? 'A' : 'B';
-        sendGameOver();
-    }
-}
-
-function updateAllClients() {
-    const state = JSON.stringify({ type: 'update', state: gameData });
-    websocketServer.clients.forEach(client => {
-        if (client.readyState === WebSocketServer.OPEN) {
-            client.send(state);
+    ws.on('message', (message) => {
+        try {
+            const parsedMessage = JSON.parse(message);
+            console.log('Received message from client:', parsedMessage);
+            if (parsedMessage.type === 'restartGame') {
+                resetGame();
+            } else {
+                handleClientMessage(parsedMessage, ws);
+            }
+        } catch (err) {
+            console.error('Error parsing message:', err);
         }
     });
-}
 
-function sendGameOver() {
-    const message = JSON.stringify({ type: 'gameOver', winner: gameData.winner });
-    websocketServer.clients.forEach(client => {
-        if (client.readyState === WebSocketServer.OPEN) {
-            client.send(message);
-        }
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
     });
-    console.log(`Game over! Winner: ${gameData.winner}`);
+
+    ws.on('close', () => {
+        console.log('A player disconnected');
+    });
+});
+
+function handleClientMessage(message, ws) {
+    try {
+        if (message.type === 'move') {
+            const { player, character, direction } = message.data;
+
+            if (player !== gameState.currentPlayer) {
+                ws.send(JSON.stringify({
+                    type: 'invalidMove',
+                    data: { message: 'Not your turn' }
+                }));
+                return;
+            }
+
+            const result = processMove(player, character, direction);
+            checkForGameEnd();
+
+            if (!result.success) {
+                ws.send(JSON.stringify({
+                    type: 'invalidMove',
+                    data: { message: result.message }
+                }));
+                return;
+            }
+
+            console.log('Move processed successfully:', result.message);
+            broadcastGameState();
+        }
+    } catch (error) {
+        console.error('Error processing client message:', error);
+        ws.send(JSON.stringify({
+            type: 'error',
+            data: { message: 'An error occurred processing your request.' }
+        }));
+    }
 }
 
-setupNewGame();
+initializeGame();
