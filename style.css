@@ -1,43 +1,79 @@
+/* Apply a dark theme to the entire page */
+body {
+    background-color: #262626; /* Dark gray for the page background */
+    color: #fff; /* White text for contrast */
+    font-family: 'Arial', sans-serif; /* Modern and readable font */
+    margin: 0;
+    padding: 20px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Enhancements to button appearance */
+button {
+    background-color: #4CAF50; /* Vibrant green for buttons */
+    color: white; /* High contrast text color */
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border-radius: 12px; /* Soft, rounded corners */
+    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19); /* Subtle shadow for 3D effect */
+    transition: background-color 0.3s ease; /* Smooth transition for hover effect */
+}
+
+button:hover {
+    background-color: #45a049; /* Darker shade of green upon hover */
+}
+
+/* Chess board and cell styles remain unchanged as per your request */
 #game-board {
     margin-top: 20px;
     display: grid;
-    grid-template-columns: repeat(5, 70px); /* Adjust if needed to fit your grid size */
-    grid-template-rows: repeat(5, 70px);
+    grid-template-columns: repeat(5, 70px); /* Uniform cell width */
+    grid-template-rows: repeat(5, 70px); /* Uniform cell height */
     gap: 5px;
-    background-color: #8B4513; /* Dark brown for the board border */
+    background-color: #8B4513; /* Dark brown, specific to the board */
     padding: 10px;
     border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); /* Soft shadow for depth */
 }
 
 .cell {
     width: 70px;
     height: 70px;
     background-color: #f5f5dc; /* Creamish color for one type of square */
-    color: #333;
+    color: #333; /* Dark text for contrast */
     border-radius: 4px;
     display: flex;
     justify-content: center;
     align-items: center;
     font-size: 1.5em;
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: background-color 0.3s; /* Smooth transition for hover effects */
 }
 
 .cell:nth-child(odd) {
-    background-color: #006400; /* Dark green for the alternate squares */
+    background-color: #006400; /* Dark green for alternating squares */
 }
 
 .cell:hover {
-    opacity: 0.9; /* Slight dim on hover for interaction */
+    opacity: 0.9; /* Dim effect on hover for interactivity */
 }
 
 .cell.playerA {
-    background-color: #e74c3c; /* Color for Player A */
-    color: #ecf0f1;
+    background-color: #e74c3c; /* Red for Player A */
+    color: #ecf0f1; /* White text for clear readability */
 }
 
 .cell.playerB {
-    background-color: #2980b9; /* Color for Player B */
-    color: #ecf0f1;
+    background-color: #2980b9; /* Blue for Player B */
+    color: #ecf0f1; /* White text for clear readability */
 }
